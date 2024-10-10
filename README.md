@@ -48,6 +48,3 @@ go run main.go input.txt output.txt
    ```bash
    go run main.go input.txt output.txt
    ```
-
-## License
-This project is licensed under the MIT License.
