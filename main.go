@@ -17,22 +17,25 @@ func createfile(output string) {
 	fmt.Printf("Output created at file: %s\n", file.Name())
 }
 
-func readfile(input string) {
+func readfile(input string, output string) {
 	data, err := os.ReadFile(input)
 	if err != nil {
 		panic(err)
 	}
 	transformedData := transformText(string(data))
-	writefile("output.txt", transformedData)
+	writefile(output, transformedData)
 }
 
 func transformText(dataStr string) string {
-	dataStr = transformHex(dataStr)
-	dataStr = transformBin(dataStr)
-	dataStr = transformCase(dataStr)
-	dataStr = transformPunctuation(dataStr)
-	dataStr = transformArticles(dataStr)
-	return dataStr
+	lines := strings.Split(dataStr, "\n") // Split by lines
+	for i, line := range lines {
+		lines[i] = transformHex(line)
+		lines[i] = transformBin(lines[i])
+		lines[i] = transformCase(lines[i])
+		lines[i] = transformPunctuation(lines[i])
+		lines[i] = transformArticles(lines[i])
+	}
+	return strings.Join(lines, "\n") // Join lines with newlines to preserve formatting
 }
 
 func transformHex(dataStr string) string {
@@ -61,50 +64,49 @@ func transformBin(dataStr string) string {
 
 func transformCase(dataStr string) string {
 	// Transform (up)
-	upRegex := regexp.MustCompile(`(\b\w+\b) \(up(?:, \d+)?\)`)
+	upRegex := regexp.MustCompile(`(\b(?:\w+\b\s*){1,})(?:\(up(?:,\s*(\d+))?\))`)
 	dataStr = upRegex.ReplaceAllStringFunc(dataStr, func(match string) string {
-		words := strings.Fields(match[:len(match)-6]) // Remove " (up)"
-		if strings.Contains(match, ",") {
-			numWords := strings.TrimSpace(match[len(match)-5:])
-			n, _ := strconv.Atoi(numWords)
-			for i := 0; i < n && i < len(words); i++ {
+		words := strings.Fields(match[:strings.LastIndex(match, " (up")]) // Extract words before (up)
+		if strings.Contains(match, ",") {                                 // Check if there's a number after (up,
+			num := match[strings.LastIndex(match, ",")+1 : strings.LastIndex(match, ")")]
+			n, _ := strconv.Atoi(strings.TrimSpace(num))
+			for i := len(words) - n; i < len(words); i++ {
 				words[i] = strings.ToUpper(words[i])
 			}
 		} else {
-			words[0] = strings.ToUpper(words[0])
+			words[len(words)-1] = strings.ToUpper(words[len(words)-1]) // Only the previous word
 		}
 		return strings.Join(words, " ")
 	})
 
-	// Implement transformations for (low) and (cap) similarly...
-	// For example:
-	lowRegex := regexp.MustCompile(`(\b\w+\b) \(low(?:, \d+)?\)`)
+	// Transform (low)
+	lowRegex := regexp.MustCompile(`(\b(?:\w+\b\s*){1,})(?:\(low(?:,\s*(\d+))?\))`)
 	dataStr = lowRegex.ReplaceAllStringFunc(dataStr, func(match string) string {
-		words := strings.Fields(match[:len(match)-6]) // Remove " (low)"
+		words := strings.Fields(match[:strings.LastIndex(match, " (low")])
 		if strings.Contains(match, ",") {
-			numWords := strings.TrimSpace(match[len(match)-5:])
-			n, _ := strconv.Atoi(numWords)
-			for i := 0; i < n && i < len(words); i++ {
+			num := match[strings.LastIndex(match, ",")+1 : strings.LastIndex(match, ")")]
+			n, _ := strconv.Atoi(strings.TrimSpace(num))
+			for i := len(words) - n; i < len(words); i++ {
 				words[i] = strings.ToLower(words[i])
 			}
 		} else {
-			words[0] = strings.ToLower(words[0])
+			words[len(words)-1] = strings.ToLower(words[len(words)-1])
 		}
 		return strings.Join(words, " ")
 	})
 
-	// For (cap)
-	capRegex := regexp.MustCompile(`(\b\w+\b) \(cap(?:, \d+)?\)`)
+	// Transform (cap)
+	capRegex := regexp.MustCompile(`(\b(?:\w+\b\s*){1,})(?:\(cap(?:,\s*(\d+))?\))`)
 	dataStr = capRegex.ReplaceAllStringFunc(dataStr, func(match string) string {
-		words := strings.Fields(match[:len(match)-6]) // Remove " (cap)"
+		words := strings.Fields(match[:strings.LastIndex(match, " (cap")])
 		if strings.Contains(match, ",") {
-			numWords := strings.TrimSpace(match[len(match)-5:])
-			n, _ := strconv.Atoi(numWords)
-			for i := 0; i < n && i < len(words); i++ {
+			num := match[strings.LastIndex(match, ",")+1 : strings.LastIndex(match, ")")]
+			n, _ := strconv.Atoi(strings.TrimSpace(num))
+			for i := len(words) - n; i < len(words); i++ {
 				words[i] = strings.Title(words[i])
 			}
 		} else {
-			words[0] = strings.Title(words[0])
+			words[len(words)-1] = strings.Title(words[len(words)-1])
 		}
 		return strings.Join(words, " ")
 	})
@@ -113,13 +115,37 @@ func transformCase(dataStr string) string {
 }
 
 func transformPunctuation(dataStr string) string {
-	// Implement punctuation transformation logic here
+	// Handle punctuation like ., ,, !, ?, : and ; (close to the previous word)
+	punctuationRegex := regexp.MustCompile(`\s*([.,!?;:])\s*`)
+	dataStr = punctuationRegex.ReplaceAllString(dataStr, "$1")
+
+	// Handle special case for punctuation groups (e.g., "...", "!?")
+	groupPunctuationRegex := regexp.MustCompile(`\s*([.]{3}|[!?]{2,3})\s*`)
+	dataStr = groupPunctuationRegex.ReplaceAllString(dataStr, "$1 ")
+
+	// Handle single quotes surrounding words and ensure they close before punctuation or stops
+	quoteRegex := regexp.MustCompile(`'\s*(.*?)\s*'`)
+	dataStr = quoteRegex.ReplaceAllStringFunc(dataStr, func(match string) string {
+		content := strings.TrimSpace(match[1 : len(match)-1])
+		// Ensure that quotes close properly before punctuation
+		if strings.ContainsAny(content[len(content)-1:], ".,!?;:") {
+			return "'" + content[:len(content)-1] + "' " + content[len(content)-1:]
+		}
+		return "'" + content + "'"
+	})
+
 	return dataStr
 }
 
 func transformArticles(dataStr string) string {
-	// Implement article transformation logic here
-	return dataStr
+	// Replace "a" with "an" before a vowel or 'h', and handle uppercase words too
+	articleRegex := regexp.MustCompile(`\b([Aa])\s+([aeiouhAEIOUH])`)
+	return articleRegex.ReplaceAllStringFunc(dataStr, func(match string) string {
+		if match[0] == 'A' {
+			return "An " + match[2:]
+		}
+		return "an " + match[2:]
+	})
 }
 
 func writefile(output string, data string) {
@@ -138,5 +164,5 @@ func main() {
 	inname := os.Args[1]
 	outname := os.Args[2]
 	createfile(outname)
-	readfile(inname)
+	readfile(inname, outname)
 }
