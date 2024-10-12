@@ -115,26 +115,35 @@ func transformCase(dataStr string) string {
 }
 
 func transformPunctuation(dataStr string) string {
-	// Handle punctuation like ., ,, !, ?, : and ; (close to the previous word)
-	punctuationRegex := regexp.MustCompile(`\s*([.,!?;:])\s*`)
-	dataStr = punctuationRegex.ReplaceAllString(dataStr, "$1")
-
-	// Handle special case for punctuation groups (e.g., "...", "!?")
+	// Handle group punctuation (e.g., "...", "!?") without splitting them
 	groupPunctuationRegex := regexp.MustCompile(`\s*([.]{3}|[!?]{2,3})\s*`)
-	dataStr = groupPunctuationRegex.ReplaceAllString(dataStr, "$1 ")
+	dataStr = groupPunctuationRegex.ReplaceAllString(dataStr, "$1") // Don't add spaces inside punctuation groups
 
-	// Handle single quotes surrounding words and ensure they close before punctuation or stops
+	// Handle standard punctuation like ., ,, !, ?, : and ; (close to the previous word, and ensure a space after)
+	punctuationRegex := regexp.MustCompile(`\s*([.,!?;:])\s*`)
+	dataStr = punctuationRegex.ReplaceAllString(dataStr, "$1 ") // Ensure space after punctuation
+
+	// Handle single quotes surrounding words and ensure they close properly before punctuation
 	quoteRegex := regexp.MustCompile(`'\s*(.*?)\s*'`)
 	dataStr = quoteRegex.ReplaceAllStringFunc(dataStr, func(match string) string {
 		content := strings.TrimSpace(match[1 : len(match)-1])
-		// Ensure that quotes close properly before punctuation
-		if strings.ContainsAny(content[len(content)-1:], ".,!?;:") {
+		// Ensure quotes are followed by a space only if they aren't directly followed by punctuation
+		if len(content) > 0 && strings.ContainsAny(content[len(content)-1:], ".,!?;:") {
 			return "'" + content[:len(content)-1] + "' " + content[len(content)-1:]
 		}
 		return "'" + content + "'"
 	})
 
-	return dataStr
+	// Fix any extra spaces caused by punctuation handling (e.g., spaces before commas or periods)
+	dataStr = strings.ReplaceAll(dataStr, " ,", ",")
+	dataStr = strings.ReplaceAll(dataStr, " .", ".")
+	dataStr = strings.ReplaceAll(dataStr, " !", "!")
+	dataStr = strings.ReplaceAll(dataStr, " ?", "?")
+	dataStr = strings.ReplaceAll(dataStr, " ;", ";")
+	dataStr = strings.ReplaceAll(dataStr, " :", ":")
+
+	// Trim any extra spaces from the final result
+	return strings.TrimSpace(dataStr)
 }
 
 func transformArticles(dataStr string) string {
