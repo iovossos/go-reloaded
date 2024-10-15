@@ -129,7 +129,7 @@ func transformPunctuation(dataStr string) string {
 		content := strings.TrimSpace(match[1 : len(match)-1])
 		// Ensure quotes are followed by a space only if they aren't directly followed by punctuation
 		if len(content) > 0 && strings.ContainsAny(content[len(content)-1:], ".,!?;:") {
-			return "'" + content[:len(content)-1] + "' " + content[len(content)-1:]
+			return "'" + content[:len(content)-1] + content[len(content)-1:] + "' "
 		}
 		return "'" + content + "'"
 	})
